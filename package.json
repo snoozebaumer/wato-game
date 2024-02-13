@@ -1,0 +1,27 @@
+{
+  "name": "wato-game",
+  "version": "1.0.0",
+  "description": "Game microservice for \"What are the odds\", keeping track of game state.",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/snoozebaumer/wato-game.git"
+  },
+  "keywords": [
+    "wato"
+  ],
+  "author": "Samuel Nussbaumer",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/snoozebaumer/wato-game/issues"
+  },
+  "homepage": "https://github.com/snoozebaumer/wato-game#readme",
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "express": "^4.18.2"
+  }
+}
