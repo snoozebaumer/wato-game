@@ -1,7 +1,8 @@
 const bodyParser = require("body-parser");
 const express = require("express");
 const {MongoClient, ServerApiVersion, ObjectId} = require("mongodb");
-require('dotenv').config();
+require("dotenv").config();
+require("log-timestamp");
 
 const server = express();
 const port = 4566;
@@ -20,13 +21,14 @@ const client = new MongoClient(uri, {
 });
 
 server.post('/game', async (req, res) => {
-    const {challenger, challenge} = req.body;
     try {
         await client.connect();
         const db = await client.db(process.env.DB_NAME);
-        const id = (await db.collection("challenge").insertOne({challenger: challenger, description: challenge})).insertedId;
+        const id = (await db.collection("challenge").insertOne(req.body)).insertedId;
+        console.log("GAME: created challenge with id: " + id)
         res.send({"id": id.toString()});
     }   catch (e) {
+        console.log(`GAME: could not create challenge with error: `, e.message);
         res.status(500).send(e);
     }
     finally {
@@ -36,16 +38,22 @@ server.post('/game', async (req, res) => {
 });
 
 server.get('/game/:id', async(req, res) => {
-    console.log(req.params.id);
+    const id = req.params.id;
 
-    const result = "Post with id " + req.params.id + " found.";
-    if (result) {
-        res.send(result);
-    } else {
-        res.status(404);
+    try {
+        await client.connect();
+        const db = await client.db(process.env.DB_NAME);
+        const user = await db.collection("challenge").findOne({_id: new ObjectId(id)});
+        console.log("GAME: fetched challenge with id: " + id);
+        res.send(user);
+    }   catch (e) {
+        console.log(`GAME: could not fetch challenge with id: ${id} with error: `, e.message);
+        res.status(404).send(e);
     }
-
-    res.end();
+    finally {
+        await client.close();
+        res.end();
+    }
 });
 
 server.put("/game/:id", async (req, res) => {
