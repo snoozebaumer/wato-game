@@ -1,8 +1,9 @@
-const bodyParser = require("body-parser");
-const express = require("express");
-const {MongoClient, ServerApiVersion, ObjectId} = require("mongodb");
-require("dotenv").config();
-require("log-timestamp");
+const bodyParser = require('body-parser');
+const express = require('express');
+const {MongoClient, ServerApiVersion, ObjectId} = require('mongodb');
+require('dotenv').config();
+require('log-timestamp');
+const {ChallengeStatus} = require('./models/challenge-status');
 
 const server = express();
 const port = 4566;
@@ -16,7 +17,7 @@ const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
         strict: true,
-        deprecationErrors: true,
+        deprecationErrors: true
     }
 });
 
@@ -24,46 +25,94 @@ server.post('/game', async (req, res) => {
     try {
         await client.connect();
         const db = await client.db(process.env.DB_NAME);
-        const id = (await db.collection("challenge").insertOne(req.body)).insertedId;
-        console.log("GAME: created challenge with id: " + id)
-        res.send({"id": id.toString()});
-    }   catch (e) {
-        console.log(`GAME: could not create challenge with error: `, e.message);
+        const id = (await db.collection('challenge').insertOne(req.body)).insertedId;
+        console.log('GAME: created challenge with id: ' + id)
+        res.send({'id': id.toString()});
+    } catch (e) {
+        console.error(`GAME: could not create challenge with error: `, e.message);
         res.status(500).send(e);
-    }
-    finally {
+    } finally {
         await client.close();
         res.end();
     }
 });
 
-server.get('/game/:id', async(req, res) => {
+server.get('/game/:id', async (req, res) => {
     const id = req.params.id;
 
     try {
         await client.connect();
         const db = await client.db(process.env.DB_NAME);
-        const user = await db.collection("challenge").findOne({_id: new ObjectId(id)});
-        console.log("GAME: fetched challenge with id: " + id);
-        res.send(user);
-    }   catch (e) {
-        console.log(`GAME: could not fetch challenge with id: ${id} with error: `, e.message);
+        const challenge = await db.collection('challenge').findOne({_id: new ObjectId(id)});
+        console.log('GAME: fetched challenge with id: ' + id);
+        res.send(challenge);
+    } catch (e) {
+        console.error(`GAME: could not fetch challenge with id: ${id} with error: `, e.message);
         res.status(404).send(e);
-    }
-    finally {
+    } finally {
         await client.close();
         res.end();
     }
 });
 
-server.put("/game/:id", async (req, res) => {
-    console.log(req.params.id);
+/*
+    breaking with REST: put is supposed to be idempotent, which this is not. This is due to the game rules:
+    we don't want the challenger to be able to edit the challengeeNumber by directly calling put /api/challenges in gateway, for example.
+    Thus we have to script which fields you are able to edit in which challengeStatus.
+    NEW -> maxRange, challengeeId; GUESS_TO_BE_SET -> challengeeNumber; CHALLENGER_TO_MOVE -> challengerNumber
+* */
+server.put('/game/:id', async (req, res) => {
+    const id = req.params.id;
+    let newStatus;
 
+    try {
+        await client.connect();
+        const db = await client.db(process.env.DB_NAME);
+        let challenge = await db.collection('challenge').findOne({_id: new ObjectId(id)});
+        if (challenge.challengeStatus === ChallengeStatus.NEW) {
+            newStatus = ChallengeStatus.GUESS_TO_BE_SET;
+            await db.collection('challenge').findOneAndUpdate({_id: new ObjectId(id)},
+                {
+                    "$set": {
+                        challengeeId: req.body.challengeeId,
+                        maxRange: req.body.maxRange,
+                        challengeStatus: newStatus
+                    }
+                }, { returnDocument: 'after'});
+        } else if (challenge.challengeStatus === ChallengeStatus.GUESS_TO_BE_SET) {
+            newStatus = ChallengeStatus.CHALLENGER_TO_MOVE;
+            await db.collection('challenge').findOneAndUpdate({_id: new ObjectId(id)},
+                {
+                    "$set": {
+                        challengeeNumber: req.body.number,
+                        challengeStatus: newStatus
+                    }
+                }, { returnDocument: 'after'});
+        } else if (challenge.challengeStatus === ChallengeStatus.CHALLENGER_TO_MOVE) {
+            newStatus = challenge.challengeeNumber === req.body.number ? ChallengeStatus.SUCCESS : ChallengeStatus.FAILURE;
+            challenge = await db.collection('challenge').findOneAndUpdate({_id: new ObjectId(id)},
+                {
+                    "$set": {
+                        challengerNumber: req.body.number,
+                        challengeStatus: newStatus
+                    }
+                }, { returnDocument: 'after'});
+        }
+        else {
+            res.status(403).send("Challenge status cannot be changed.");
+        }
+
+        console.log(`GAME: changed challenge status for id: ${id}. New status: ${newStatus}, edited values: ${JSON.stringify(req.body)}`)
+        res.send(challenge);
+    } catch (e) {
+        console.error(`GAME: could not edit challenge with id: ${id} and change: ${JSON.stringify(req.body)} with error: `, e.message);
+        res.status(500).send(e);
+    }
 
     res.status(200);
     res.end();
 });
 
 server.listen(port, () => {
-    console.log("GAME: listening on port ", port);
+    console.log('GAME: listening on port ', port);
 });
