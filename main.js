@@ -32,7 +32,6 @@ server.post('/game', async (req, res) => {
         console.error(`GAME: could not create challenge with error: `, e.message);
         res.status(500).send(e);
     } finally {
-        await client.close();
         res.end();
     }
 });
@@ -50,7 +49,6 @@ server.get('/game/:id', async (req, res) => {
         console.error(`GAME: could not fetch challenge with id: ${id} with error: `, e.message);
         res.status(404).send(e);
     } finally {
-        await client.close();
         res.end();
     }
 });
@@ -69,9 +67,9 @@ server.put('/game/:id', async (req, res) => {
         await client.connect();
         const db = await client.db(process.env.DB_NAME);
         let challenge = await db.collection('challenge').findOne({_id: new ObjectId(id)});
-        if (challenge.challengeStatus === ChallengeStatus.NEW) {
+        if (challenge.challengeStatus === ChallengeStatus.NEW && req.body.maxRange) {
             newStatus = ChallengeStatus.GUESS_TO_BE_SET;
-            await db.collection('challenge').findOneAndUpdate({_id: new ObjectId(id)},
+            challenge = await db.collection('challenge').findOneAndUpdate({_id: new ObjectId(id)},
                 {
                     "$set": {
                         challengeeId: req.body.challengeeId,
@@ -79,27 +77,27 @@ server.put('/game/:id', async (req, res) => {
                         challengeStatus: newStatus
                     }
                 }, { returnDocument: 'after'});
-        } else if (challenge.challengeStatus === ChallengeStatus.GUESS_TO_BE_SET) {
+        } else if (challenge.challengeStatus === ChallengeStatus.GUESS_TO_BE_SET && req.body.challengeeNumber) {
             newStatus = ChallengeStatus.CHALLENGER_TO_MOVE;
-            await db.collection('challenge').findOneAndUpdate({_id: new ObjectId(id)},
-                {
-                    "$set": {
-                        challengeeNumber: req.body.number,
-                        challengeStatus: newStatus
-                    }
-                }, { returnDocument: 'after'});
-        } else if (challenge.challengeStatus === ChallengeStatus.CHALLENGER_TO_MOVE) {
-            newStatus = challenge.challengeeNumber === req.body.number ? ChallengeStatus.SUCCESS : ChallengeStatus.FAILURE;
             challenge = await db.collection('challenge').findOneAndUpdate({_id: new ObjectId(id)},
                 {
                     "$set": {
-                        challengerNumber: req.body.number,
+                        challengeeNumber: req.body.challengeeNumber,
+                        challengeStatus: newStatus
+                    }
+                }, { returnDocument: 'after'});
+        } else if (challenge.challengeStatus === ChallengeStatus.CHALLENGER_TO_MOVE && req.body.challengerNumber) {
+            newStatus = challenge.challengeeNumber === req.body.challengerNumber ? ChallengeStatus.SUCCESS : ChallengeStatus.FAILURE;
+            challenge = await db.collection('challenge').findOneAndUpdate({_id: new ObjectId(id)},
+                {
+                    "$set": {
+                        challengerNumber: req.body.challengerNumber,
                         challengeStatus: newStatus
                     }
                 }, { returnDocument: 'after'});
         }
         else {
-            res.status(403).send("Challenge status cannot be changed.");
+            return res.status(403).send("Challenge status cannot be changed.");
         }
 
         console.log(`GAME: changed challenge status for id: ${id}. New status: ${newStatus}, edited values: ${JSON.stringify(req.body)}`)
