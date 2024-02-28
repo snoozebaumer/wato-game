@@ -58,6 +58,8 @@ server.get('/game/:id', async (req, res) => {
     we don't want the challenger to be able to edit the challengeeNumber by directly calling put /api/challenges in gateway, for example.
     Thus we have to script which fields you are able to edit in which challengeStatus.
     NEW -> maxRange, challengeeId; GUESS_TO_BE_SET -> challengeeNumber; CHALLENGER_TO_MOVE -> challengerNumber
+
+    EDIT after research: this should be changed to PATCH on refactor
 * */
 server.put('/game/:id', async (req, res) => {
     const id = req.params.id;
