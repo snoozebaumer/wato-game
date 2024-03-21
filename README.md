@@ -1,4 +1,8 @@
 # wato-game
+____
+> **:warning:
+Archiving in favor of a monorepo approach. See [wato](https://github.com/snoozebaumer/wato) for the new repository.**
+____
 Game microservice for ["What are the Odds"](https://github.com/snoozebaumer/wato).
 
 See the gateway [wato-gateway](https://github.com/snoozebaumer/wato-gateway) for complete system setup information.
